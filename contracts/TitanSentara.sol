@@ -2,48 +2,27 @@
 pragma solidity ^0.8.28;
 
 contract TitanSentara {
-    address public admin; // Public variable generates admin() getter
+    address public admin;
+    bool public votingActive;
 
     constructor() {
-        // Leave admin unassigned for first user to claim
-    }
-    function claimAdmin() external {
-        require(admin == address(0), "Admin exists");
         admin = msg.sender;
-    }
-    struct Position {
-        uint256 id;
-        string name;
-        bool exists;
-    }
-    
-    struct Candidate {
-        uint256 id;
-        string name;
-        uint256 positionId;
-        uint256 voteCount;
-        bool exists;
+        admins[msg.sender] = true;
+        adminCount = 1;
     }
 
-    uint256 private _positionCounter;
-    uint256 private _candidateCounter;
-    mapping(uint256 => Position) public positions;
-    mapping(uint256 => Candidate) public candidates;
-    mapping(uint256 => uint256[]) public positionCandidates;
-    
-    uint256 public voteCost;
-    uint256 public voteStartTime;
-    uint256 public voteEndTime;
-    
-    mapping(address => bool) public admins;
-    uint256 public adminCount;
-    
-    event PositionAdded(uint256 indexed positionId, string name);
-    event CandidateAdded(uint256 indexed candidateId, string name, uint256 positionId);
-    event VotesCast(address indexed voter, uint256 positionId, uint256 candidateId, uint256 quantity);
-    event VotingParametersSet(uint256 voteCost, uint256 startTime, uint256 endTime);
-    event AdminAdded(address indexed admin);
-    event AdminRemoved(address indexed admin);
+    function claimAdmin() external {
+        require(admin == address(0), "Admin already set");
+        admin = msg.sender;
+    }
+
+    function startVoting() external onlyAdmin {
+        votingActive = true;
+    }
+
+    function endVoting() external onlyAdmin {
+        votingActive = false;
+    }
 
     modifier onlyAdmin() {
         require(admins[msg.sender], "Only admin can perform this action");
@@ -57,12 +36,40 @@ contract TitanSentara {
         );
         _;
     }
-    
-    // constructor() {
-    //     admins[msg.sender] = true;
-    //     adminCount = 1;
-    //     emit AdminAdded(msg.sender);
-    // }
+
+    struct Position {
+        uint256 id;
+        string name;
+        bool exists;
+    }
+
+    struct Candidate {
+        uint256 id;
+        string name;
+        uint256 positionId;
+        uint256 voteCount;
+        bool exists;
+    }
+
+    uint256 private _positionCounter;
+    uint256 private _candidateCounter;
+    mapping(uint256 => Position) public positions;
+    mapping(uint256 => Candidate) public candidates;
+    mapping(uint256 => uint256[]) public positionCandidates;
+
+    uint256 public voteCost;
+    uint256 public voteStartTime;
+    uint256 public voteEndTime;
+
+    mapping(address => bool) public admins;
+    uint256 public adminCount;
+
+    event PositionAdded(uint256 indexed positionId, string name);
+    event CandidateAdded(uint256 indexed candidateId, string name, uint256 positionId);
+    event VotesCast(address indexed voter, uint256 positionId, uint256 candidateId, uint256 quantity);
+    event VotingParametersSet(uint256 voteCost, uint256 startTime, uint256 endTime);
+    event AdminAdded(address indexed admin);
+    event AdminRemoved(address indexed admin);
 
     function setVotingParameters(
         uint256 _voteCost,
@@ -79,7 +86,7 @@ contract TitanSentara {
     function addPosition(string memory name) external onlyAdmin {
         require(bytes(name).length > 0, "Invalid name");
         require(!_positionExists(name), "Position exists");
-        
+
         _positionCounter++;
         positions[_positionCounter] = Position({
             id: _positionCounter,
@@ -96,7 +103,7 @@ contract TitanSentara {
         require(positions[positionId].exists, "Invalid position");
         require(bytes(name).length >= 2, "Name too short");
         require(!_candidateExistsInPosition(name, positionId), "Candidate exists");
-        
+
         _candidateCounter++;
         candidates[_candidateCounter] = Candidate({
             id: _candidateCounter,
@@ -119,7 +126,7 @@ contract TitanSentara {
         require(candidates[candidateId].positionId == positionId, "Candidate mismatch");
         require(quantity > 0, "Minimum 1 vote");
         require(msg.value >= voteCost * quantity, "Insufficient funds");
-        
+
         candidates[candidateId].voteCount += quantity;
         emit VotesCast(msg.sender, positionId, candidateId, quantity);
     }
@@ -127,7 +134,7 @@ contract TitanSentara {
     function addAdmin(address newAdmin) external onlyAdmin {
         require(newAdmin != address(0), "Invalid address");
         require(!admins[newAdmin], "Already admin");
-        
+
         admins[newAdmin] = true;
         adminCount++;
         emit AdminAdded(newAdmin);
@@ -137,7 +144,7 @@ contract TitanSentara {
         require(adminToRemove != address(0), "Invalid address");
         require(admins[adminToRemove], "Not an admin");
         require(adminCount > 1, "Cannot remove last admin");
-        
+
         admins[adminToRemove] = false;
         adminCount--;
         emit AdminRemoved(adminToRemove);
